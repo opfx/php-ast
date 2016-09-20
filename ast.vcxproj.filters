@@ -21,13 +21,13 @@
     <ClInclude Include="php_ast.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ast_util.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="ast.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="ast_kinds.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ast_util.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

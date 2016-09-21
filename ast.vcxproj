@@ -93,18 +93,6 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug_TS|x64'">
-    <LocalDebuggerCommand>$(PhpSrcDir)\$(PlatformName)\$(Configuration)\php.exe</LocalDebuggerCommand>
-    <LocalDebuggerCommandArguments>-n -dextension_dir=$(TargetDir) -dextension=$(TargetFileName) -f index.php</LocalDebuggerCommandArguments>
-    <LocalDebuggerWorkingDirectory>$(ProjectDir)/php</LocalDebuggerWorkingDirectory>
-    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommand>$(PhpSrcDir)\$(PlatformName)\$(Configuration)\php.exe</LocalDebuggerCommand>
-    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>-n -dextension_dir=$(TargetDir) -dextension=$(TargetFileName) -f index.php</LocalDebuggerCommandArguments>
-    <LocalDebuggerWorkingDirectory>$(ProjectDir)/php</LocalDebuggerWorkingDirectory>
-  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>

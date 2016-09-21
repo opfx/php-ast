@@ -26,6 +26,14 @@ extern ZEND_API zend_ast_process_t zend_ast_process;
 
 ////////////////////////////////////////////////////////////
 //
+
+static inline size_t zend_ast_size(uint32_t children) {
+	return sizeof(zend_ast) - sizeof(zend_ast *) + sizeof(zend_ast *) * children;
+}
+static inline size_t zend_ast_list_size(uint32_t children) {
+	return sizeof(zend_ast_list) - sizeof(zend_ast *) + sizeof(zend_ast *) * children;
+}
+
 void ast_create_object(zval* return_value, zend_ast* ast_p, ast_tree* tree_p, zend_bool zval_as_value_b) {
 	zval* cached_obj_p;
 	zend_class_entry* ce_p = NULL;
@@ -99,8 +107,7 @@ void ast_destroy(zend_ast* ast_p) {
 		for (i = 0; i < 4; i++) {
 			ast_destroy(decl_p->child[i]);
 			decl_p->child[i] = NULL;
-		}
-		zend_ast_destroy(decl_p);
+		}	
 		return;
 	}
 
@@ -113,8 +120,55 @@ void ast_destroy(zend_ast* ast_p) {
 	zend_ast_destroy(ast_p);
 }
 
+/* {{{ performs a complete copy of the specified ast*/
 zend_ast* ast_copy(zend_ast* ast_p) {
-
+	if (ast_p == NULL) {
+		return NULL;
+	}
+	if (ast_p->kind == ZEND_AST_ZNODE) {
+		php_error_docref(NULL, E_WARNING, "Encountered unexpected AST_ZNODE");
+		return NULL;
+	}
+	if (ast_p->kind == ZEND_AST_ZVAL) {
+		zend_ast_zval *result_p = zend_arena_alloc(&CG(ast_arena), sizeof(zend_ast_zval));
+		*result_p = *(zend_ast_zval*)ast_p;
+		zval_copy_ctor(&result_p->val);
+		return (zend_ast*)result_p;
+	}
+	if (zend_ast_is_list(ast_p)) {
+		uint32_t i;
+		zend_ast_list* list_p = zend_ast_get_list(ast_p);
+		zend_ast_list* result_p = zend_arena_alloc(&CG(ast_arena), zend_ast_list_size(list_p->children));
+		*result_p = *list_p;
+		for (i = 0; i < result_p->children; i++) {
+			result_p->child[i] = ast_copy(list_p->child[i]);
+		}
+		return (zend_ast*)result_p;
+	}
+	if (ast_p->kind < (1 << ZEND_AST_IS_LIST_SHIFT)) {
+		uint32_t i;
+		zend_ast_decl* decl_p = (zend_ast_decl*)ast_p;
+		zend_ast_decl* result_p = zend_arena_alloc(&CG(ast_arena), sizeof(zend_ast_decl));
+		*result_p = *decl_p;
+		if (result_p->doc_comment) {
+			zend_string_addref(result_p->doc_comment);
+		}
+		if (result_p->name) {
+			zend_string_addref(result_p->name);
+		}
+		for (i = 0; i < 4; i++) {
+			result_p->child[i] = ast_copy(decl_p->child[i]);
+		}
+		return (zend_ast*)result_p;
+	}
+	uint32_t i;
+	uint32_t children_cnt = zend_ast_get_num_children(ast_p);
+	zend_ast* result_p = zend_arena_alloc(&CG(ast_arena), zend_ast_size(children_cnt));
+	*result_p = *ast_p;
+	for (i = 0; i < children_cnt; i++) {
+		result_p->child[i] = ast_copy(ast_p->child[i]);
+	}
+	return result_p;
 }
 
 
@@ -180,12 +234,82 @@ static PHP_METHOD(Ast, parseString) {
 	ast_create_object(return_value, tree_p->root, tree_p, 0);
 }/* }}} */
 
+ /* {{{ proto Ast::parseFile(string filename, int options) */
+ZEND_BEGIN_ARG_INFO(ast_parsefile_arginfo, 0)
+ZEND_ARG_INFO(0, filename)
+ZEND_ARG_INFO(0, options)
+ZEND_END_ARG_INFO()
+
+static PHP_METHOD(Ast, parseFile) {
+	zend_string* filename_zstr_p;
+	zend_long options_l;
+	zend_file_handle file_handle;
+	zend_lex_state original_lexical_state;
+	int parse_result_n;
+
+	ast_tree* tree_p;
+
+	if (zend_parse_parameters(ZEND_NUM_ARGS(), "S|l", &filename_zstr_p, &options_l)) {
+		RETURN_NULL();
+	}
+
+	if (zend_stream_open(ZSTR_VAL(filename_zstr_p), &file_handle) == FAILURE) {
+		php_error_docref(NULL, E_WARNING, "Failed to open file");
+		RETURN_NULL();
+	}
+	if (open_file_for_scanning(&file_handle) == FAILURE) {
+		zend_destroy_file_handle(&file_handle);
+		RETURN_NULL();
+	}
+
+	CG(ast) = NULL;
+	CG(ast_arena) = zend_arena_create(1024*32);
+	zend_save_lexical_state(&original_lexical_state);
+	
+	parse_result_n = zendparse();
+	
+	if (parse_result_n != 0) {
+		zend_ast_destroy(CG(ast));
+		zend_arena_destroy(CG(ast_arena));
+		zend_restore_lexical_state(&original_lexical_state);
+		zend_destroy_file_handle(&file_handle);
+		RETURN_NULL();
+	}
+
+	if (zend_ast_process && !(options_l&AST_NO_PROCESS)) {
+		zend_ast_process(CG(ast));
+	}
+
+	tree_p = emalloc(sizeof(ast_tree));
+	tree_p->root = CG(ast);
+	tree_p->arena = CG(ast_arena);
+	tree_p->refcount = 0;
+
+	CG(ast) = NULL;
+	CG(ast_arena) = NULL;
+	zend_restore_lexical_state(&original_lexical_state);
+	zend_destroy_file_handle(&file_handle);
+	ast_create_object(return_value, tree_p->root, tree_p, 0);	
+}/* }}} */
+
+ /* {{{ proto Ast::getNode(string $code, int $options) */
+ZEND_BEGIN_ARG_INFO(ast_getnode_arginfo, 0)
+ZEND_ARG_TYPE_INFO(0, filename, IS_STRING, 0)
+ZEND_ARG_INFO(0, options)
+ZEND_END_ARG_INFO()
+static PHP_METHOD(Ast, getNode) {
+
+}
+/* }}} */
+
 
 
 
 static zend_function_entry ast_methods[] = {
 	PHP_ME(Ast, __construct, NULL, ZEND_ACC_PRIVATE | ZEND_ACC_CTOR)
 	PHP_ME(Ast, parseString, ast_parsestring_arginfo, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+	PHP_ME(Ast, parseFile, ast_parsefile_arginfo, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+	PHP_ME(Ast, getNode, ast_getnode_arginfo, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
 	PHP_FE_END
 };
 

@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)\php</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerDebuggerType>Auto</LocalDebuggerDebuggerType>
+    <LocalDebuggerCommandArguments>-n -dextension_dir=$(TargetDir) -dextension=$(TargetFileName) -f index.php</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommand>$(PhpSrcDir)\$(PlatformName)\$(Configuration)\php.exe</LocalDebuggerCommand>
+  </PropertyGroup>
+</Project>

@@ -10,6 +10,7 @@
 
 ZEND_BEGIN_MODULE_GLOBALS(ast)
 HashTable nodes;
+HashTable files;
 ZEND_END_MODULE_GLOBALS(ast)
 
 #if defined(ZTS) && defined(COMPILE_DL_AST)
